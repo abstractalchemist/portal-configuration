@@ -47,7 +47,6 @@ echo "Please make sure you have run kshell before hand"
 
 kinit jmhirata
 ssh -f -N -oStrictHostKeyChecking=no aperture
-newgrp tomcat
 mkdir workspace
 pushd workspace
 git clone -b release ssh://stash/por/portalframework.git
