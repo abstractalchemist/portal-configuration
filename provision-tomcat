@@ -98,7 +98,7 @@ test.cluster   10.40.40.105   CENTER,HOME,WORKDIR  Test Cluster
 EOF
 chmod 644 /usr/local/portal-sudo-scripts/portal.cfg
 
-mkdir -p /var/log/{portal,tomcat6/portal}
+mkdir -p /var/log/{portal,tomcat6/portal,tomcat6/shells}
 chmod -R 755 /var/log/{portal,tomcat6}
 chown -R tomcat:tomcat /var/log/{portal,tomcat6}
 
