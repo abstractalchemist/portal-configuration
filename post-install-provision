@@ -22,8 +22,8 @@ BASE=/mnt/c/Users/abstr/Downloads
 KRB=HPCMP_RELEASE_20171101_client-3.10.0-693.2.2.el7.x86_64-Linux-64.tar.gz
 OSSH=user-openssh-7.5p1b-x86_64-unknown-linux-gnu.tgz
 
-#scp $BASE/$KRB $AWS_HOST:
-#scp $BASE/$OSSH $AWS_HOST:
+scp $BASE/$KRB $AWS_HOST:
+scp $BASE/$OSSH $AWS_HOST:
 
 cat <<EOF > /tmp/post-install-provision
 cat <<MOF | sudo su
