@@ -1,0 +1,46 @@
+#!/bin/bash
+
+
+pushd /tmp
+rm -rf big_dir_$USER
+rm -f big_dir_$USER.tar.gz
+mkdir big_dir_$USER
+pushd big_dir_$USER
+for i in {0..50};
+do
+dd if=/dev/urandom of=file_$i count=1 bs=1M > /dev/null
+done
+popd
+tar cjf big_dir_$USER.tar.gz big_dir_$USER
+rm -rf big_dir_$USER
+popd
+
+
+HOSTS=( $( grep -v "#" /usr/local/portal-sudo-scripts/portal.cfg | awk '{ print $2 }' ) )
+echo "found hosts $HOSTS"
+for h in ${HOSTS[@]};
+do
+echo Testing $h
+rm -f /tmp/big_$h_$USER.tar.gz /tmp/big_dir_$h_$USER.zip
+BASE=http://localhost:9000/portal/delegate/rest/$h
+curl -v -H "unix-name:$USER" -H "application:test" $BASE/filesystemaccessor/fileInfo > /dev/null
+echo
+curl -v -H "unix-name:$USER" -H "application:test" -X DELETE $BASE/filesystemaccessor/fileInfo/tmp/big_dir_$USER.tar.gz > /dev/null
+echo
+curl -v -H "unix-name:$USER" -H "application:test" -X DELETE $BASE/filesystemaccessor/fileInfo/tmp/big_dir_$USER > /dev/null
+echo
+
+curl -v --data-binary @/tmp/big_dir_$USER.tar.gz -H "unix-name:$USER" -H "application:test" -H "content-type:application/octet-stream" -X PUT $BASE/filesystemaccessor/files/tmp?filename=big_dir_$USER.tar.gz 
+echo
+curl -v -H "unix-name:$USER" -H "application:test" -X POST -H "content-type:application/json" -d '{ "jsonrpc":"2.0","id":"0","method":"expand"}' $BASE/filesystemaccessor/fileInfo/tmp/big_dir_$USER.tar.gz
+echo
+curl -v -H "unix-name:$USER" -H "application:test" $BASE/filesystemaccessor/fileInfo/tmp/big_dir_$USER
+echo
+curl -v -H "unix-name:$USER" -H "application:test" $BASE/filesystemaccessor/files/tmp/big_dir_$USER  > /tmp/big_dir_$h_$USER.zip
+echo
+
+curl -H "unix-name:$USER" -H "application:test" -X GET $BASE/filesystemaccessor/files/tmp/big_dir_$USER.tar.gz > /tmp/big_$h_$USER.tar.gz
+echo
+diff /tmp/big_dir_$USER.tar.gz /tmp/big_$h_$USER.tar.gz
+unzip -t /tmp/big_dir_$h_$USER.zip
+done
