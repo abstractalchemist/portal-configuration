@@ -1,0 +1,38 @@
+#!/bin/bash
+
+if ! [[ $AWS_HOST ]];
+then
+   echo please define AWS_HOST
+fi
+
+while [[ $# -gt 0 ]];
+do
+case $1 in
+   --help)
+      cat <<EOF
+      usage:  AWS_HOST=<host> ./post-install-provision
+EOF
+      exit 0
+      ;;
+esac
+shift
+done
+
+BASE=/mnt/c/Users/abstr/Downloads
+KRB=HPCMP_RELEASE_20171101_client-3.10.0-693.2.2.el7.x86_64-Linux-64.tar.gz
+OSSH=user-openssh-7.5p1b-x86_64-unknown-linux-gnu.tgz
+
+scp $BASE/$KRB $AWS_HOST:
+scp $BASE/$OSSH $AWS_HOST:
+
+cat <<EOF > /tmp/post-install-provision
+cat <<EOF | sudo su
+pushd /usr/local
+tar xvf /home/ec2-user/$KRB
+tar xvf /home/ec2-user/$OSSH
+popd
+EOF
+EOF
+chmod 700 /tmp/post-install-provision
+
+/tmp/post-install-provision | ssh $AWS_HOST
