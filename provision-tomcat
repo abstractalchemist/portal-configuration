@@ -1,0 +1,110 @@
+#!/bin/bash
+
+useradd tomcat
+groupadd amadmin
+groupadd umadmin
+groupadd access01
+usermod -a -G access01 ec2-user
+usermod -a -G tomcat ec2-user
+yum -y install nfs-utils wget git vim mariadb mariadb-server
+cat <<EOF >> /home/ec2-user/.bashrc
+export JAVA_HOME=/usr/java/default
+export PATH=\$JAVA_HOME/bin:/usr/local/krb5/bin:/usr/local/ossh/bin:/usr/local/apache-maven-3.5.4/bin:\$PATH:\$HOME/.local/bin
+export KRB5_CONF=/usr/local/krb5/etc/krb5.conf
+
+EOF
+
+mkdir -p /home/tomcat/.ssh
+chown tomcat:tomcat /home/tomcat/.ssh
+sudo -u tomcat ssh-keygen -f /home/tomcat/.ssh/id_rsa -N '' -b 2048
+mkdir -p /home/ec2-user/.local/bin
+curl https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein > /home/ec2-user/.local/bin/lein
+chown -R ec2-user:ec2-user /home/ec2-user/.local
+chmod 700 /home/ec2-user/.local/bin/lein
+
+cat <<EOF > /usr/lib/systemd/system/p-cwfs.mount
+[Unit]
+Description=Center Wide File System
+
+[Mount]
+What=10.40.40.104:/p/cwfs
+Where=/p/cwfs
+Type=nfs
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat <<EOF > /usr/lib/systemd/system/p-cwfs.automount
+[Unit]
+Description=NFS automount
+
+[Automount]
+Where=/p/cwfs
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable p-cwfs.automount
+cat <<EOF > /home/ec2-user/.ssh/config
+Host aperture
+Hostname aperture.mhpcc.hpc.mil
+LocalForward 7999 stash:7999
+User jmhirata
+
+Host stash
+Hostname localhost
+Port 7999
+User git
+IdentityFile ~/.ssh/id_rsa_stash
+EOF
+
+pushd /tmp
+wget https://s3-us-west-2.amazonaws.com/portal.config/fswatch-1.12.0-1.x86_64.rpm
+wget https://s3-us-west-2.amazonaws.com/portal.config/jdk-8u181-linux-x64.rpm
+wget https://s3-us-west-2.amazonaws.com/portal.config/portal-scripts-1.0.0.0-7.x86_64.rpm
+yum -y install fswatch-1.12.0-1.x86_64.rpm jdk-8u181-linux-x64.rpm portal-scripts-1.0.0.0-7.x86_64.rpm
+wget http://www-eu.apache.org/dist/maven/maven-3/3.5.4/binaries/apache-maven-3.5.4-bin.tar.gz
+pushd /usr/local
+tar xvf /tmp/apache-maven-3.5.4-bin.tar.gz
+popd
+popd
+
+cat <<EOF > /usr/local/portal-sudo-scripts/check_enabled
+#!/bin/bash
+
+echo enabled
+EOF
+chmod 755 /usr/local/portal-sudo-scripts/check_enabled
+cat <<EOF > /etc/sudoers.d/portal
+Defaults:tomcat !requiretty
+Defaults:tomcat visiblepw
+ 
+  
+Runas_Alias ACCESS = %access01, %access02, %access03
+   
+    
+tomcat ALL = ( ACCESS ) NOPASSWD:/usr/local/portal-sudo-scripts/sudo_cmds
+EOF
+
+mkdir /portalapps
+chmod 755 /portalapps
+chown ec2-user:tomcat /portalapps
+
+cat <<EOF > /usr/local/portal-sudo-scripts/portal.cfg
+#
+test.cluster   10.40.40.105   CENTER,HOME,WORKDIR  Test Cluster
+
+EOF
+chmod 644 /usr/local/portal-sudo-scripts/portal.cfg
+
+mkdir -p /var/log/{portal,tomcat6/portal}
+chmod -R 755 /var/log/{portal,tomcat6}
+chown -R tomcat:tomcat /var/log/{portal,tomcat6}
+
+curl -sL https://rpm.nodesource.com/setup_10.x | bash -
+yum -y install nodejs
+yum -y upgrade
+
+

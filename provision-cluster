@@ -1,0 +1,60 @@
+#!/bin/bash
+
+yum -y install wget nfs-utils
+useradd tomcat
+groupadd access01
+usermod -a -G access01 ec2-user
+cat <<EOF > /etc/sudoers.d/portal
+
+Defaults:tomcat !requiretty
+Defaults:tomcat visiblepw
+ 
+  
+Runas_Alias ACCESS = %access01, %access02, %access03
+   
+    
+tomcat ALL = ( ACCESS ) NOPASSWD:/usr/local/portal-sudo-scripts/sudo_cmds
+EOF
+
+pushd /tmp
+wget https://s3-us-west-2.amazonaws.com/portal.config/portal-scripts-1.0.0.0-7.x86_64.rpm
+yum -y install portal-scripts-1.0.0.0-7.x86_64.rpm
+popd
+
+cat <<EOF > /usr/lib/systemd/system/p-cwfs.mount
+[Unit]
+Description=Center Wide File System
+
+[Mount]
+What=10.40.40.104:/p/cwfs
+Where=/p/cwfs
+Type=nfs
+
+[Install]
+WantedBy=mulit-user.target
+EOF
+
+cat <<EOF > /usr/lib/systemd/system/p-cwfs.automount
+[Unit]
+Description=NFS automount
+
+[Mount]
+Where=/p/cwfs
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable p-cwfs.automount
+cat <<EOF > /usr/local/portal-sudo-scripts/check_enabled
+#!/bin/bash
+
+echo enabled
+EOF
+chmod 755 /usr/local/portal-sudo-scripts/check_enabled
+mkdir -p /home/tomcat/.ssh
+touch /home/tomcat/.ssh/authorized_keys
+chmod 700 /home/tomcat/.ssh
+chmod 600 /home/tomcat/.ssh/authorized_keys
+chown -R /home/tomcat/.ssh

@@ -1,0 +1,10 @@
+#!/bin/bash
+
+yum -y install wget nfs-utils
+mkdir -p /p/cwfs/ec2-user
+chown ec2-user:ec2-user /p/cwfs/ec2-user
+cat <<EOF > /etc/exports
+/p/cwfs 10.40.40.0/24(rw,sync,no_root_squash)
+EOF
+
+systemctl restart nfs

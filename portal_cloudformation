@@ -1,0 +1,516 @@
+AWSTemplateFormatVersion: 2010-09-09
+Mappings:
+  RegionMapping:
+    us-west-1:
+      prod: ami-28e07e50
+    us-west-2:
+      prod: ami-28e07e50
+    us-gov-west-1:
+      prod: foo
+Parameters:
+  SSHKeyPair:
+    Type: String
+    Default: Administrator
+    Description: Enter KeyPair For Accessing Instance
+  InstanceType:
+    Type: String
+    Default: t2.small
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t2.medium
+    Description: Enter the Instance Type
+  SSHLocation:
+    Type: String
+    Description: The IP of the location where you're sshing from
+  Cidr:
+    Type: String
+    Default: 10.40.40.0
+    Description: the cidr range for the vpc
+Resources:
+
+  PortalVPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: 
+        'Fn::Join':
+            - ''
+            -   - Ref: Cidr
+                - '/24'
+      Tags: 
+        - Key: Name
+          Value: PortalVPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 26f1faa5-aa88-4339-88df-02cf8041ccf2
+  PortalSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: 
+        'Fn::Join':
+            - ''
+            -   - Ref: Cidr
+                - '/24'
+      MapPublicIpOnLaunch: true
+      VpcId:
+        Ref: PortalVPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: a4641d46-b7a3-4a24-942b-bd8b67060d84
+  PortalGatewayAttachemnt:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      InternetGatewayId:
+        Ref: PortalGateway
+      VpcId:
+        Ref: PortalVPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 7dfff6c1-9c7b-40f4-aa27-ffb864c0b1d7
+  PortalGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 006d7f30-684c-4e9f-91a5-64bde508ce0c
+  PortalRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId:
+        Ref: PortalVPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 33427f2b-4f86-4064-acea-865d6fc561de
+  PortalRoute1:
+    Type: 'AWS::EC2::Route'
+    DependsOn: PortalGateway
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: PortalGateway
+      RouteTableId:
+        Ref: PortalRouteTable
+
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: ed19029a-bc9a-4abe-b1ff-3229a06cb8eb
+  PortalSubnetRouteTableAttachment:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+        RouteTableId:
+            Ref: PortalRouteTable
+        SubnetId:
+            Ref: PortalSubnet
+  PortalTomcat:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      KeyName:
+        Ref: SSHKeyPair
+      InstanceType:
+        Ref: InstanceType
+      ImageId: !FindInMap 
+        - RegionMapping
+        - !Ref 'AWS::Region'
+        - prod
+      PrivateIpAddress: 10.40.40.103
+      SubnetId:
+        Ref: PortalSubnet
+      SecurityGroupIds:
+        - Ref: SSHAccessSG
+        - Ref: NFSClientSG
+        - Ref: TomcatAccessSG
+      Tags:
+        - Key: Name
+          Value: Tomcat
+      UserData:
+        'Fn::Base64':
+          'Fn::Join':
+            - ''
+            - - |
+                #!/bin/bash
+              - |
+                yum -y install curl
+              - |
+                curl https://s3-us-west-2.amazonaws.com/portal.config/provision-tomcat | bash
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 8dcfcd07-2065-49ca-9445-66d248a1d4dc
+      'AWS::CloudFormation::Init':
+        configSets:
+          All:
+            - Install
+        Install:
+          packages:
+            yum:
+              nfs-utils: {}
+              unzip: {}
+              'nmap-ncat': {}
+          groups:
+            access01: {}
+            access02: {}
+          users:
+            tomcat: {}
+            asadmin: {}
+          files:
+            '/etc/sudoers.d/portal':
+                content: |+
+                    Defaults:tomcat !requiretty
+                    Defaults:tomcat askpassmod
+                    
+                    tomcat ALL = ( ec2-user ) NOPASSWD:/usr/local/portal-sudo-scripts/sudo_cmds
+            
+          commands:
+            addgroup:
+                command: 'usermod -a -G access01 ec2-user'
+  PortalHTTPD:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      IamInstanceProfile: 'read-portal-files-cf'
+      KeyName:
+        Ref: SSHKeyPair
+      InstanceType:
+        Ref: InstanceType
+      ImageId: !FindInMap 
+        - RegionMapping
+        - !Ref 'AWS::Region'
+        - prod
+      PrivateIpAddress: 10.40.40.101
+      SubnetId:
+        Ref: PortalSubnet
+      SecurityGroupIds:
+        - Ref: SSHAccessSG
+        - Ref: HTTPSAccessSG
+      UserData:
+        'Fn::Base64':
+          'Fn::Join':
+            - ''
+            - - |
+                #!/bin/bash
+              - |
+                yum install -y httpd mod_ssl
+      Tags:
+        - Key: Name
+          Value: HttpD
+
+               
+  PortalCluster:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      KeyName:
+        Ref: SSHKeyPair
+      InstanceType:
+        Ref: InstanceType
+      ImageId: !FindInMap 
+        - RegionMapping
+        - !Ref 'AWS::Region'
+        - prod
+      PrivateIpAddress: 10.40.40.105
+      SubnetId:
+        Ref: PortalSubnet
+      SecurityGroupIds:
+        - Ref: SSHAccessSG
+        - Ref: NFSClientSG
+      Tags:
+        - Key: Name
+          Value: Edge Node
+      UserData:
+        'Fn::Base64':
+          'Fn::Join':
+            - ''
+            - - |
+                #!/bin/bash
+              - |
+                yum install -y curl
+              - |
+                curl https://s3-us-west-2.amazonaws.com/portal.config/provision-cluster | bash
+  PortalNFS:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      KeyName:
+        Ref: SSHKeyPair
+      InstanceType: t2.micro
+      ImageId: !FindInMap 
+        - RegionMapping
+        - !Ref 'AWS::Region'
+        - prod
+      PrivateIpAddress: 10.40.40.104
+      SubnetId:
+        Ref: PortalSubnet
+      SecurityGroupIds:
+        - Ref: SSHAccessSG
+        - Ref: NFSAccessSG
+      Tags:
+        - Key: Name
+          Value: NFS
+      UserData:
+        'Fn::Base64':
+          'Fn::Join':
+            - ''
+            - - |
+                #!/bin/bash
+              - |
+                yum install -y curl
+              - |
+                curl https://s3-us-west-2.amazonaws.com/portal.config/provision-nfs | bash
+  SSHAccessSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: portal-ssh-sg
+      GroupDescription: portal-ssh-sg
+      VpcId:
+        Ref: PortalVPC
+      SecurityGroupIngress:
+        - CidrIp:
+            'Fn::Join':
+                - ''
+                -   - Ref:
+                        SSHLocation
+                    - '/32'
+          FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+        - CidrIp: 10.40.40.0/24
+          FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+      Tags:
+        - Key: Name
+          Value: SSHAccessSG
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: cee12074-ef39-4623-ba56-c8096e90bcbd
+  TomcatAccessSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: portal-tomcat-sg
+      VpcId:
+        Ref: PortalVPC
+      SecurityGroupIngress:
+        - SourceSecurityGroupId:
+            Ref: HTTPSAccessSG
+          FromPort: 0
+          ToPort: 65535
+          IpProtocol: tcp
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: ea0bc6d3-b5fb-4d42-8683-6b149a49120a
+  HTTPSAccessSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: portal-https-sg
+      VpcId:
+        Ref: PortalVPC
+      SecurityGroupIngress:
+        - CidrIp:
+            'Fn::Join':
+                - ''
+                -   - Ref:
+                        SSHLocation
+                    - '/32'
+          FromPort: 443
+          ToPort: 443
+          IpProtocol: tcp
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 70eec430-86ed-45f5-a2df-20c13a997f15
+  NFSAccessSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: portal-nfs-sg
+      VpcId:
+        Ref: PortalVPC
+      SecurityGroupIngress:
+        - CidrIp: 10.40.40.0/24
+          FromPort: 0
+          ToPort: 65535
+          IpProtocol: tcp
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 9900970b-2377-47f5-b7d7-d39f3af5e3de
+  NFSClientSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: portal-nfs-client-sg
+      VpcId:
+        Ref: PortalVPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: fb2bb63a-da2d-405c-ab50-716181626a23
+Metadata:
+  'AWS::CloudFormation::Designer':
+    fb2bb63a-da2d-405c-ab50-716181626a23:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 450
+        'y': 300
+      z: 1
+      embeds: []
+      iscontainedinside:
+        - 26f1faa5-aa88-4339-88df-02cf8041ccf2
+    9900970b-2377-47f5-b7d7-d39f3af5e3de:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 570
+        'y': 300
+      z: 1
+      embeds: []
+      iscontainedinside:
+        - 26f1faa5-aa88-4339-88df-02cf8041ccf2
+    70eec430-86ed-45f5-a2df-20c13a997f15:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 450
+        'y': 420
+      z: 1
+      embeds: []
+      iscontainedinside:
+        - 26f1faa5-aa88-4339-88df-02cf8041ccf2
+    cee12074-ef39-4623-ba56-c8096e90bcbd:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 570
+        'y': 420
+      z: 1
+      embeds: []
+      iscontainedinside:
+        - 26f1faa5-aa88-4339-88df-02cf8041ccf2
+    14a0ee13-a7c9-4dde-a3c7-6ad852147df4:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 480
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - cee12074-ef39-4623-ba56-c8096e90bcbd
+        - 9900970b-2377-47f5-b7d7-d39f3af5e3de
+      iscontainedinside:
+        - a4641d46-b7a3-4a24-942b-bd8b67060d84
+    9600a9b2-6c0c-4a8f-9f61-0467d616402a:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 480
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - cee12074-ef39-4623-ba56-c8096e90bcbd
+        - fb2bb63a-da2d-405c-ab50-716181626a23
+      iscontainedinside:
+        - a4641d46-b7a3-4a24-942b-bd8b67060d84
+    a06019b0-3112-4234-af33-4d31c50b2eb3:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 480
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - cee12074-ef39-4623-ba56-c8096e90bcbd
+        - 70eec430-86ed-45f5-a2df-20c13a997f15
+      iscontainedinside:
+        - a4641d46-b7a3-4a24-942b-bd8b67060d84
+    8dcfcd07-2065-49ca-9445-66d248a1d4dc:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 540
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - cee12074-ef39-4623-ba56-c8096e90bcbd
+        - fb2bb63a-da2d-405c-ab50-716181626a23
+      iscontainedinside:
+        - a4641d46-b7a3-4a24-942b-bd8b67060d84
+    ed19029a-bc9a-4abe-b1ff-3229a06cb8eb:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 540
+        'y': 540
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 006d7f30-684c-4e9f-91a5-64bde508ce0c
+      iscontainedinside:
+        - 33427f2b-4f86-4064-acea-865d6fc561de
+    33427f2b-4f86-4064-acea-865d6fc561de:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 450
+        'y': 90
+      z: 1
+      embeds: []
+      iscontainedinside:
+        - 26f1faa5-aa88-4339-88df-02cf8041ccf2
+    006d7f30-684c-4e9f-91a5-64bde508ce0c:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 660
+        'y': 90
+      z: 1
+      embeds: []
+    26f1faa5-aa88-4339-88df-02cf8041ccf2:
+      size:
+        width: 420
+        height: 330
+      position:
+        x: 60
+        'y': 90
+      z: 1
+      embeds:
+        - ea0bc6d3-b5fb-4d42-8683-6b149a49120a
+        - a4641d46-b7a3-4a24-942b-bd8b67060d84
+    a4641d46-b7a3-4a24-942b-bd8b67060d84:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 90
+        'y': 150
+      z: 2
+      parent: 26f1faa5-aa88-4339-88df-02cf8041ccf2
+      embeds: []
+      iscontainedinside:
+        - 26f1faa5-aa88-4339-88df-02cf8041ccf2
+        - 26f1faa5-aa88-4339-88df-02cf8041ccf2
+    ea0bc6d3-b5fb-4d42-8683-6b149a49120a:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 270
+        'y': 150
+      z: 2
+      parent: 26f1faa5-aa88-4339-88df-02cf8041ccf2
+      embeds: []
+      iscontainedinside:
+        - 26f1faa5-aa88-4339-88df-02cf8041ccf2
+    7dfff6c1-9c7b-40f4-aa27-ffb864c0b1d7:
+      source:
+        id: 26f1faa5-aa88-4339-88df-02cf8041ccf2
+      target:
+        id: 006d7f30-684c-4e9f-91a5-64bde508ce0c
+      z: 1
