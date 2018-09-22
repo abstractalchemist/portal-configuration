@@ -9,3 +9,4 @@ After creating the cloudformation using portal_cloudformation, execute the follo
 6. build portal-lib
 7. probably rebuild portalframework
 8. run mvn dependency:copy-dependencies -f pom-deps.xml -DoutputDirectory=classpath
+9. Intialize the tomcat connection

@@ -6,7 +6,7 @@ groupadd umadmin
 groupadd access01
 usermod -a -G access01 ec2-user
 usermod -a -G tomcat ec2-user
-yum -y install nfs-utils wget git vim mariadb mariadb-server
+yum -y install nfs-utils wget git vim mariadb mariadb-server bzip2 unzip
 cat <<EOF >> /home/ec2-user/.bashrc
 export JAVA_HOME=/usr/java/default
 export PATH=\$JAVA_HOME/bin:/usr/local/krb5/bin:/usr/local/ossh/bin:/usr/local/apache-maven-3.5.4/bin:\$PATH:\$HOME/.local/bin
