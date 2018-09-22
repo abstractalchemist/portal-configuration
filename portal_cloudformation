@@ -132,7 +132,7 @@ Resources:
               - |
                 yum -y install curl
               - |
-                curl https://s3-us-west-2.amazonaws.com/portal.config/provision-tomcat | bash
+                curl https://raw.githubusercontent.com/abstractalchemist/portal-configuration/master/provision-tomcat | bash
     Metadata:
       'AWS::CloudFormation::Designer':
         id: 8dcfcd07-2065-49ca-9445-66d248a1d4dc
@@ -223,7 +223,7 @@ Resources:
               - |
                 yum install -y curl
               - |
-                curl https://s3-us-west-2.amazonaws.com/portal.config/provision-cluster | bash
+                curl https://raw.githubusercontent.com/abstractalchemist/portal-configuration/master/provision-cluster | bash
   PortalNFS:
     Type: 'AWS::EC2::Instance'
     Properties:
@@ -252,7 +252,7 @@ Resources:
               - |
                 yum install -y curl
               - |
-                curl https://s3-us-west-2.amazonaws.com/portal.config/provision-nfs | bash
+                curl https://raw.githubusercontent.com/abstractalchemist/portal-configuration/master/provision-nfs | bash
   SSHAccessSG:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
