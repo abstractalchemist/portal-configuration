@@ -57,4 +57,7 @@ mkdir -p /home/tomcat/.ssh
 touch /home/tomcat/.ssh/authorized_keys
 chmod 700 /home/tomcat/.ssh
 chmod 600 /home/tomcat/.ssh/authorized_keys
-chown -R /home/tomcat/.ssh
+chown -R tomcat:tomcat /home/tomcat/.ssh
+mkdir -p /u/work/ec2-user
+chown ec2-user:ec2-user /u/work/ec2-user
+
