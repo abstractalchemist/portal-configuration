@@ -37,14 +37,19 @@ chmod 700 /tmp/post-install-provision
 
 cat /tmp/post-install-provision | ssh $AWS_HOST
 rm /tmp/post-install-provision
-
+scp $HOME/.ssh/id_rsa_stash $AWS_HOST:.ssh
+ssh $AWS_HOST chmod 600 .ssh/id_rsa_stash
 cat <<EOF > /tmp/get-stuff
-kshell
+
+#!/bin/bash
+
+echo "Please make sure you have run kshell before hand"
+
 kinit jmhirata
 ssh -f -N -oStrictHostKeyChecking=no aperture
 mkdir workspace
 pushd workspace
-git -b release clone ssh://stash/por/portalframework.git
+git clone -b release ssh://stash/por/portalframework.git
 popd
 pushd /portalapps
 git clone -b release ssh://stash/por/portal-clj.git portal-lib
@@ -55,7 +60,6 @@ mkdir classpath
 lein pom
 mvn dependency:copy-dependencies -DoutputDirectory=classpath
 popd
-exit
 
 EOF
 
