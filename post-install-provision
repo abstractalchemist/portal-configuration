@@ -22,17 +22,41 @@ BASE=/mnt/c/Users/abstr/Downloads
 KRB=HPCMP_RELEASE_20171101_client-3.10.0-693.2.2.el7.x86_64-Linux-64.tar.gz
 OSSH=user-openssh-7.5p1b-x86_64-unknown-linux-gnu.tgz
 
-scp $BASE/$KRB $AWS_HOST:
-scp $BASE/$OSSH $AWS_HOST:
+#scp $BASE/$KRB $AWS_HOST:
+#scp $BASE/$OSSH $AWS_HOST:
 
 cat <<EOF > /tmp/post-install-provision
-cat <<EOF | sudo su
+cat <<MOF | sudo su
 pushd /usr/local
 tar xvf /home/ec2-user/$KRB
 tar xvf /home/ec2-user/$OSSH
 popd
-EOF
+MOF
 EOF
 chmod 700 /tmp/post-install-provision
 
-/tmp/post-install-provision | ssh $AWS_HOST
+cat /tmp/post-install-provision | ssh $AWS_HOST
+rm /tmp/post-install-provision
+
+cat <<EOF > /tmp/get-stuff
+kshell
+kinit jmhirata
+ssh -f -N -oStrictHostKeyChecking=no aperture
+mkdir workspace
+pushd workspace
+git -b release clone ssh://stash/por/portalframework.git
+popd
+pushd /portalapps
+git clone -b release ssh://stash/por/portal-clj.git portal-lib
+pushd portal-lib
+sudo cp jobtracker process-server portal-rest /etc/init.d
+sudo chmod 755 /etc/init.d/jobtracker /etc/init.d/process-server /etc/init.d/portal-rest
+mkdir classpath
+lein pom
+mvn dependency:copy-dependencies -DoutputDirectory=classpath
+popd
+exit
+
+EOF
+
+scp /tmp/get-stuff $AWS_HOST:
