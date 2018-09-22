@@ -95,7 +95,6 @@ chown ec2-user:tomcat /portalapps
 cat <<EOF > /usr/local/portal-sudo-scripts/portal.cfg
 #
 test.cluster   10.40.40.105   CENTER,HOME,WORKDIR  Test Cluster
-
 EOF
 chmod 644 /usr/local/portal-sudo-scripts/portal.cfg
 
